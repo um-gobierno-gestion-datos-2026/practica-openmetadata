@@ -1,0 +1,6 @@
+evidencias/*
+!evidencias/.gitkeep
+.env
+*.log
+__pycache__/
+docker-volume/

@@ -1,0 +1,26 @@
+name: Validar configuración y caso PostgreSQL
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Revisar JSON y scripts
+        run: |
+          python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
+          for script in scripts/*.sh; do bash -n "$script"; done
+      - name: Validar Compose
+        run: docker compose config --quiet
+      - name: Iniciar PostgreSQL con la carga inicial
+        run: docker compose up -d --wait --wait-timeout 120 postgres-lab
+      - name: Probar caso y permisos en PostgreSQL
+        run: python3 tests/test_postgres.py
+      - name: Ver logs si falla
+        if: failure()
+        run: docker compose logs --tail=100 postgres-lab
+      - name: Limpiar entorno efímero de CI
+        if: always()
+        run: docker compose down -v
