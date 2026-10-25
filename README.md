@@ -1,187 +1,282 @@
-# Laboratorio individual: OpenMetadata en GitHub Codespaces
+# Laboratorio: catalogación de archivos y carga a PostgreSQL
 
-Cada estudiante tendrá OpenMetadata, su ejecutor de ingestas y PostgreSQL con el
-caso de movilidad. No necesita instalar aplicaciones en su computadora.
+Cada estudiante tiene su propio OpenMetadata 1.12.6, ejecutor de ingestas,
+MinIO compatible con S3 y PostgreSQL 16.10. Todos los datos son sintéticos.
 
-## Usuarios y contraseñas por defecto
+## Qué se inicia y qué hace el estudiante
 
-| Servicio / cuenta | Usuario | Contraseña | Base / puerto |
-|---|---|---|---|
-| OpenMetadata | `admin@open-metadata.org` | `admin` | UI: `8585` |
-| Airflow (ejecutor) | `admin` | `admin` | UI: `8080` |
-| PostgreSQL (administrar el caso) | `estudiante` | `estudiante_lab` | `movilidad`, `5432` |
-| PostgreSQL (lector para OpenMetadata) | `catalogo_lector` | `lector_lab` | `movilidad`, `5432` |
+Al arrancar se prepara OpenMetadata, un bucket `movilidad` vacío en MinIO,
+un usuario lector de almacenamiento y cuatro tablas vacías en PostgreSQL nuevo.
+**No se publican archivos ni se cargan filas automáticamente.**
 
-La imagen PostgreSQL es `postgres:16.10-bookworm` y se inicia automáticamente junto
-con OpenMetadata. La base `movilidad` y las tablas del caso se crean en su primer
-arranque. `POSTGRES_USER=estudiante` crea una cuenta administradora de la instancia
-PostgreSQL de laboratorio; no existe un login llamado `postgres` en esta configuración.
+La práctica tiene dos etapas independientes:
 
-Desde el conector de OpenMetadata: host `postgres-lab:5432`.
-Desde la terminal del Codespace o VS Code: host `localhost`, puerto `5432`.
-PostgreSQL no tiene una interfaz web en ese puerto: utilizar un cliente SQL o
-`bash scripts/sql.sh` para la consola incluida.
+1. Publicar archivos en MinIO y catalogarlos en OpenMetadata como almacenamiento.
+2. Ejecutar la carga de esos objetos a PostgreSQL y catalogar las tablas resultantes.
 
-En Codespaces mantener todos los puertos privados. Estas claves conocidas están
-pensadas para los datos sintéticos de la práctica.
-Las credenciales PostgreSQL se inicializan solo al crear el volumen: cambiar el
-YAML no modifica las contraseñas de una instancia ya inicializada.
+OpenMetadata guarda metadatos. MinIO conserva los CSV y PostgreSQL las filas de las tablas.
+MinIO utiliza buckets y prefijos de objetos. Su interfaz muestra esos prefijos como
+carpetas, pero no es un conector nativo al filesystem local de la computadora.
 
-## 1. Crear el repositorio (docente)
+## Arranque local en Windows (recomendado)
 
-1. Crear en GitHub un repositorio vacío llamado `openmetadata-codespaces`.
-2. Descomprimir el paquete y subir **el contenido** de esta carpeta a la raíz.
-   Incluir `.devcontainer/`, `.github/` y `.gitignore`: pueden estar ocultos en el explorador.
-   GitHub debe mostrar `.devcontainer/devcontainer.json` directamente en la raíz,
-   sin una segunda carpeta `openmetadata-codespaces` intermedia.
-3. Para subir con Git desde la carpeta descomprimida:
+Abrir Docker Desktop. Actualizar el contenido completo del proyecto desde este
+paquete, sin eliminar volumenes. Desde CMD, en la carpeta que contiene compose.yaml:
 
-   ```bash
-   git init -b main
-   git add .
-   git commit -m "Agregar laboratorio OpenMetadata para Codespaces"
-   git remote add origin https://github.com/TU_USUARIO/openmetadata-codespaces.git
-   git push -u origin main
-   ```
-
-4. Opcional: Settings > General > Template repository. Cada estudiante puede
-   elegir Use this template > Create a new repository para conservar su trabajo.
-5. Realizar la prueba piloto del apartado de verificación antes de distribuirlo.
-
-## 2. Abrir el entorno (estudiante)
-
-1. Crear tu repositorio desde el template, o hacer un fork si no está configurado.
-2. Code > Codespaces > menú de opciones > New with options.
-3. Seleccionar una máquina de **4 CPU y 16 GB RAM**, con al menos 32 GB de almacenamiento.
-   La configuración solicita estos recursos; su disponibilidad depende de tu cuenta.
-4. Crear el Codespace. Se prepara Docker y se ejecuta `scripts/start.sh` automáticamente.
-   El primer arranque descarga varias imágenes y puede demorar varios minutos.
-5. Cuando termine, abrir la pestaña **Ports** y el puerto **8585** en el navegador.
-   Mantener la visibilidad **Private**. Si falta el puerto, agregarlo manualmente.
-6. Entrar a OpenMetadata con `admin@open-metadata.org` / `admin`.
-   Son credenciales del quickstart para un laboratorio privado con datos sintéticos.
-
-Si el inicio falla, ejecutar `bash scripts/status.sh`. Para reintentar sin borrar datos:
-
-```bash
-bash scripts/start.sh
+```bat
+iniciar.cmd
 ```
 
-## 3. Conectar PostgreSQL desde OpenMetadata
+El lanzador inicia todos los servicios y espera OpenMetadata, Airflow, PostgreSQL,
+MinIO y la preparacion del bucket. Si algo falla muestra el error, no borra datos.
+Tambien se puede ejecutar desde PowerShell con `./iniciar.cmd`.
 
-En Settings > Services > Databases, agregar un servicio PostgreSQL:
+## Arranque local con Docker Compose
+
+Descomprimir o clonar el repositorio. Desde su raíz, con Docker y Compose iniciados:
+
+```bash
+docker compose up -d
+docker compose ps -a
+```
+
+MinIO y `minio-init` son servicios del arranque por defecto, sin activar perfiles.
+Los perfiles se reservan para los comandos manuales de publicacion y carga.
+
+El proceso `minio-init` crea el bucket y el lector. Debe terminar con Exited (0),
+igual que la migración del catálogo. No vuelve a publicar fuentes al reiniciar.
+
+## Arranque en Codespaces
+
+Subir todo el contenido del paquete a la raíz de un repositorio, incluyendo
+`.devcontainer` y `.github`. Opcionalmente marcarlo como template para la clase.
+Cada estudiante crea su copia y elige Code > Codespaces > New with options,
+con 4 CPU y 16 GB RAM. El devcontainer inicia automáticamente los servicios.
+Abrir los puertos 8585 y 9001 en Ports, conservando su visibilidad privada.
+La cuota y el almacenamiento dependen de la cuenta GitHub.
+
+## Accesos
+
+| Servicio | Acceso local | Usuario | Contraseña |
+|---|---|---|---|
+| OpenMetadata | http://localhost:8585 | admin@open-metadata.org | admin |
+| MinIO Console | http://localhost:9001 | minioadmin | minioadmin_lab |
+| Airflow | http://localhost:8080 | admin | admin |
+| PostgreSQL administrador | localhost:5432, base movilidad | estudiante | estudiante_lab |
+| PostgreSQL lector del catálogo | postgres-lab:5432 desde Docker | catalogo_lector | lector_lab |
+| S3 lector del catálogo | http://minio:9000 desde Docker | catalogo_storage | lector_storage_lab |
+
+En la conexión S3 el usuario lector actúa como Access Key ID y su contraseña
+como Secret Access Key. Región: `us-east-1`. No requiere cuenta AWS.
+`9000` es la API S3 y `9001` la consola. Dentro de Docker no usar localhost para
+conectar desde OpenMetadata a otro servicio. Las credenciales son solo de laboratorio.
+
+## Etapa 1. Publicar un archivo y una carpeta
+
+### 1.1 Archivo individual
+
+Abrir MinIO Console, entrar al bucket `movilidad` y crear/abrir el prefijo
+`individual/`. Elegir Upload File y subir:
+
+`actividad/fuentes/individual/tramos.csv`
+
+Resultado esperado: `s3://movilidad/individual/tramos.csv`.
+
+Alternativa por terminal, sin instalar un cliente S3 local:
+
+```bash
+docker compose run --rm archivos archivo
+```
+
+### 1.2 Carpeta de reportes
+
+Subir la carpeta `actividad/fuentes/reportes` al bucket manteniendo el prefijo
+`reportes/`, o crear ese prefijo y subir sus dos CSV. Verificar las claves:
+
+- `reportes/reportes_2026-10-19.csv` (6 filas de datos).
+- `reportes/reportes_2026-10-20.csv` (1 fila de datos).
+
+La publicación recursiva desde la carpeta local se practica también con:
+
+```bash
+docker compose run --rm archivos carpeta
+docker compose run --rm archivos listar
+```
+
+Esta operación copia archivos desde un filesystem local montado al almacén S3.
+Los dos archivos de reportes comparten columnas y forman un conjunto lógico.
+No confundir cantidad de archivos con cantidad de filas.
+
+### 1.3 Manifiesto de catalogación
+
+Revisar `actividad/manifiestos/openmetadata.json`. Tiene dos entradas:
+una para el CSV individual y otra para el conjunto `reportes/`, ambas formato CSV.
+Publicarlo en la raíz del bucket (no dentro de una carpeta) desde la consola,
+o ejecutar:
+
+```bash
+docker compose run --rm archivos manifiesto
+```
+
+El manifiesto describe dónde están los datos y qué formato tienen. No contiene
+las filas ni carga datos a PostgreSQL. El conector lo usa para extraer estructura.
+Una entrada de carpeta representa un conjunto, no necesariamente un activo separado
+por cada archivo diario. Una muestra de un archivo no valida todos los archivos.
+
+## Etapa 1.4. Catalogar las fuentes en OpenMetadata
+
+Settings > Services > Storage > Add New Service, tipo **S3**:
 
 | Campo | Valor |
 |---|---|
-| Nombre del servicio | `movilidad_postgres` |
-| Host y puerto | `postgres-lab:5432` |
-| Base / Database | `movilidad` |
-| Usuario | `catalogo_lector` |
-| Contraseña | `lector_lab` |
-| SSL | desactivado / Disable para esta red privada de laboratorio |
-| Filtro de esquemas (Include) | `^movilidad_g01$` |
+| Nombre | `movilidad_archivos` |
+| AWS Access Key ID | `catalogo_storage` |
+| AWS Secret Access Key | `lector_storage_lab` |
+| AWS Region | `us-east-1` |
+| Endpoint URL (endPointURL) | `http://minio:9000` |
+| Bucket Names | `movilidad` |
 
-Usar **Test Connection**. El host es el nombre del contenedor, porque el ejecutor
-accede por la red Docker. No utilizar la dirección pública del Codespace ni localhost.
+No configurar un rol IAM ni credenciales temporales. El endpoint es interno y
+apunta a MinIO, no a Amazon. Probar conexión, guardar el servicio y crear una
+Metadata Ingestion desde Ingestions/Agents, según la interfaz. Mantener Override
+Metadata desactivado para conservar descripciones humanas. Desplegar y ejecutar.
 
-Crear y ejecutar Metadata Ingestion; desactivar Override Metadata para preservar
-las descripciones escritas. Verificar las cuatro tablas: `tramos`, `reportes_crudos`,
-`reportes_validos`, `resumen_diario`. La ingesta inicial se hace manualmente para
-comprender la diferencia entre la base y su representación en el catálogo.
+En Explore > Containers, o los activos del servicio, buscar el bucket y las
+entradas `individual/tramos.csv` y `reportes`. Inspeccionar columnas y procedencia.
+El conector de almacenamiento usa entidades Container, distintas de las tablas
+PostgreSQL. Si solo aparece el bucket, revisar manifiesto y permisos de lectura.
 
-El puerto 8080 corresponde a Airflow (ejecutor), no a otro catálogo. Si hay que
-revisar su UI, usar `admin` / `admin`. No es necesario crear DAGs para esta práctica.
-El quickstart conserva `http://ingestion:8080` como endpoint del ejecutor y
-`http://openmetadata-server:8585/api` para su comunicación con el catálogo.
+MinIO no implementa CloudWatch. El conector puede advertir que no recupera métricas
+de tamaño y cantidad de objetos y mostrar 0. Comprobar esos valores en MinIO,
+no interpretarlos como prueba de que el bucket está vacío.
 
-## 4. Consultar los datos y realizar la actividad
+### Consigna de gobernanza
 
-Desde la terminal integrada del navegador:
+- Describir qué representa cada conjunto y cada columna.
+- Asignar responsables y una clasificación docente de datos sintéticos.
+- Vincular términos del glosario: tramo, reporte y reporte válido.
+- Explicar qué implica agregar un tercer CSV de reportes al mismo prefijo.
+- Registrar evidencia de los activos y de la ejecución de ingesta.
+
+## Etapa 2. Cargar los objetos a PostgreSQL
+
+Después de publicar las fuentes y observarlas en el catálogo:
 
 ```bash
-bash scripts/sql.sh actividad/sql/02_explorar.sql
-bash scripts/sql.sh actividad/sql/03_test_conservacion.sql
+docker compose run --rm --build carga
 ```
 
-Para una consola SQL interactiva: `bash scripts/sql.sh`. Salir con `\q`.
-El usuario `estudiante` puede modificar los datos; `catalogo_lector` solo los consulta.
-No ejecutar nuevamente `01_preparar_caso.sql`: se cargó automáticamente al crear la base.
+La primera ejecución construye la imagen del pequeño cargador Python. Este lee
+`individual/tramos.csv` y **todos los CSV bajo `reportes/` desde MinIO**, valida
+cabezales y tipos, y reemplaza las filas del caso en una transacción. No usa los
+CSV locales como atajo. Un cambio local debe publicarse antes para afectar la carga.
+Si falla la lectura o la carga, conserva los datos previos de PostgreSQL.
+Repetir la carga no acumula duplicados, pero restaura el error intencional del resumen.
+No elimina tablas ni altera sus permisos. Respaldar los datos si ya fueron modificados.
 
-Secuencia sugerida de 120 minutos:
-
-| Trabajo | Minutos |
+| Tabla en movilidad_g01 | Filas esperadas con los CSV suministrados |
 |---|---:|
-| Comprender el criterio y explorar el catálogo | 25 |
-| Documentar columnas, granularidad, glosario y clasificación | 20 |
-| Asignar responsables y registrar la incidencia | 15 |
-| Dibujar y justificar linaje manual entre las cuatro tablas | 20 |
-| Perfilar, crear y ejecutar pruebas, contrastar resultados | 25 |
-| Analizar impacto de un cambio y guardar evidencias | 15 |
+| tramos | 2 |
+| reportes_crudos | 7 |
+| reportes_validos | 5 |
+| resumen_diario | 3 |
 
-Completar `actividad/plantillas/`. Conservar evidencia de responsables, términos,
-etiquetas, grafo de linaje y resultados de pruebas. El linaje se construye manualmente;
-las tablas de este caso no permiten inferirlo automáticamente a partir de vistas.
+R02 aparece repetido. R03 carece de tramo y queda excluido de los válidos.
+R04 carece de velocidad, pero debe contar como reporte. El resumen inicial
+lo excluye intencionalmente. El conteo T02 del 19/10 es 1 y debería ser 2,
+con velocidad media 26 km/h en ambos casos.
 
-Para el perfilado, configurar 100% de la muestra y comprobar que la ejecución
-termina. Para la prueba de conservación, configurar Table Custom SQL Query con el
-contenido de `03_test_conservacion.sql`, estrategia ROWS y umbral 0. Crear la definición
-no la ejecuta: correr la pipeline de calidad y revisar el estado.
-
-El resumen tiene un error intencional. Después del diagnóstico y cuando la docente
-lo indique, consultar `actividad/docente/`. Allí están la solución y el SQL para
-corregir el resumen sin eliminar su tabla. Repetir pruebas y perfilado después.
-
-## 5. Guardar y terminar
+Para abrir una consola SQL:
 
 ```bash
-bash scripts/backup.sh
-bash scripts/stop.sh
+docker compose exec postgres-lab psql -U estudiante -d movilidad
 ```
 
-Guardar plantillas y evidencias en tu repositorio, sin contraseñas ni tokens.
-Descargar también la copia SQL de `evidencias/` (se excluye de Git por defecto).
-El backup cubre PostgreSQL; para los metadatos del catálogo conservar capturas y
-las definiciones relevantes en las plantillas. No es un backup completo de OpenMetadata.
-Los volúmenes conservan el estado mientras se mantenga el Codespace; eliminarlo
-borra su almacenamiento. Reconstruir el contenedor no sustituye una copia externa.
+Después: `SELECT * FROM movilidad_g01.resumen_diario;`. Salir con `\q`.
 
-**Detener el Codespace desde GitHub al terminar.** Detener Docker o cerrar el
-navegador no finaliza el cómputo de una máquina que sigue activa. Revisar cuotas
-y almacenamiento en la cuenta antes de la clase. No se requiere GitHub Education.
+## Etapa 2.1. Catalogar el destino y documentar el linaje
 
-## Diagnóstico
+Crear servicio Database > PostgreSQL `movilidad_postgres`, host `postgres-lab:5432`,
+base `movilidad`, usuario `catalogo_lector`, contraseña `lector_lab`.
+Ejecutar Metadata Ingestion con Schema Includes `^movilidad_g01$`.
 
-| Síntoma | Acción |
-|---|---|
-| Docker no disponible | Revisar creation log y reconstruir el dev container con su configuración |
-| Proceso terminado por memoria / exit 137 | Confirmar 4 CPU y 16 GB; detener y cambiar tipo de máquina |
-| Puerto 8585 aún no responde | `bash scripts/status.sh`; comprobar migración y servidor |
-| Catálogo abre pero falla ingesta | Revisar `ingestion`, Test Connection y logs; no cambiar endpoints internos a URLs públicas |
-| Error de conexión PostgreSQL | Host `postgres-lab:5432`, base `movilidad`, lector y contraseña de la tabla anterior |
-| Pocas tablas encontradas | Filtro `^movilidad_g01$` y revisar estado de Metadata Ingestion |
-| Prueba creada sin resultado | Ejecutar la pipeline; si falla infraestructura, marcar el SQL externo como evidencia externa |
-| Credenciales de BD distintas tras editar configuración | Las variables de inicialización no cambian usuarios en un volumen ya creado |
+Relacionar procedencia de archivos, proceso de carga, tablas válidas y resumen.
+Los procesos suministrados no publican linaje automáticamente. Intentar el enlace
+manual Container a Table cuando la interfaz de la versión lo permita. Si la UI
+no ofrece ese tipo de enlace, registrar la relación en las fichas con las FQN o
+URLs de ambos activos y construir el linaje entre tablas. No presentar una nota
+como una arista efectivamente creada. La integración automática del cargador con
+la API de linaje queda fuera de esta versión.
 
-No usar `docker compose down -v` como diagnóstico: elimina los volúmenes del laboratorio.
-No hay un reinicio destructivo automático.
+Perfilado y pruebas de calidad son ejecuciones adicionales. Usar los SQL de
+`actividad/sql/` y la solución de `actividad/docente/` después del diagnóstico.
 
-## Verificación y alcance
+## Adoptar esta versión con una instalación anterior
 
-Base: quickstart oficial OpenMetadata **1.12.6**, PostgreSQL **16.10**.
-Ver `vendor/README.md` para origen y cambios. La configuración no está orientada a producción.
+Actualizar los archivos y ejecutar `docker compose up -d`. No borrar volúmenes.
+Los datos ya existentes en PostgreSQL permanecen. Para mostrar la primera etapa
+no hace falta borrarlos: todavía se pueden publicar y catalogar las fuentes.
+Cuando se ejecute `carga`, reemplazará las filas con los objetos del bucket.
+Las descripciones existentes del servicio PostgreSQL se conservan si no se activa
+Override Metadata. No ejecutar el SQL de creación sobre tablas existentes.
+No usar `docker compose down -v` para actualizar.
 
-En este entorno de preparación se revisaron la configuración, la sintaxis de scripts
-y el caso SQL. **No se ejecutó Docker ni un Codespace aquí.** El workflow incluido
-valida Compose y prueba el caso con PostgreSQL real cuando se ejecuta en GitHub Actions.
-No sustituye la prueba piloto completa de ingesta, perfilado y calidad en Codespaces.
+## Guardar y detener
 
-Antes de clase: crear un Codespace limpio, esperar todos los servicios, iniciar sesión,
-conectar la base con el lector, ingerir cuatro tablas, ejecutar perfilado y la prueba,
-corregir el resumen y repetirla. T02 debe pasar de uno a dos reportes y conservar
-una velocidad informada y media de 26 km/h. Detener y reabrir para revisar persistencia.
+`bash scripts/backup.sh` respalda PostgreSQL, no todo el catálogo ni el bucket.
+Guardar las fichas, evidencia del catálogo y los archivos fuente fuera del Codespace.
+No guardar claves o tokens reales en el repositorio.
+
+```bash
+docker compose stop
+```
+
+En Codespaces detener también la máquina desde GitHub. Eliminarla puede perder
+volúmenes y archivos no respaldados. Para diagnóstico: `docker compose ps -a`
+y `docker compose logs --tail=80 NOMBRE_DEL_SERVICIO`.
+
+## Verificación y límites
+
+Se verificaron localmente la configuración, los CSV, el manifiesto contra el esquema
+oficial de OpenMetadata 1.12.6 y pruebas del lector de archivos. El workflow de
+GitHub Actions comprueba publicación S3 y carga PostgreSQL cuando se ejecuta.
+En este entorno no hay Docker: sigue pendiente el ensayo completo de arranque,
+conexión S3, ingesta y representación de activos en OpenMetadata antes de clase.
+Las diapositivas anteriores describen la versión previa y deben adaptarse a esta secuencia.
 
 ## Referencias
 
-- https://docs.open-metadata.org/v1.12.x/quick-start/local-docker-deployment
-- https://docs.open-metadata.org/v1.12.x/connectors/database/postgres
-- https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/adding-a-dev-container-configuration/introduction-to-dev-containers
+- https://docs.open-metadata.org/v1.12.x/connectors/storage/s3/yaml
+- https://github.com/open-metadata/OpenMetadata/blob/1.12.6-release/openmetadata-spec/src/main/resources/json/schema/metadataIngestion/storage/containerMetadataConfig.json
+- https://github.com/open-metadata/OpenMetadata/blob/1.12.6-release/openmetadata-spec/src/main/resources/json/schema/entity/services/connections/storage/s3Connection.json
+- https://github.com/minio/minio/releases/tag/RELEASE.2025-04-22T22-12-26Z
+
+## Error 401 al descargar MinIO desde Quay
+
+Esta versión usa mirrors publicados por Teable en GitHub Container Registry, con
+las mismas etiquetas que las imágenes originales. No requieren una cuenta AWS ni
+cambian los usuarios y claves del laboratorio. Sustituir el compose anterior y
+ejecutar:
+
+```bash
+docker compose pull minio minio-init
+docker compose up -d
+```
+
+La imagen cliente también se utiliza en el servicio `archivos`. No borrar
+volúmenes ni ejecutar `down -v`. Este cambio afecta al origen de las imágenes,
+no al almacenamiento existente. El mirror es de un tercero, no un registro
+administrado por MinIO. Teable documenta que conserva los builds originales.
+Fuente: https://github.com/teableio/teable-deployment/blob/main/VERSIONS.md
+
+## Comprobacion del arranque completo
+
+- `minio`, `postgres-lab`, `openmetadata-server` e `ingestion`: activos y healthy.
+- `minio-init` y `execute-migrate-all`: Exited (0), trabajo completado.
+- MinIO Console en 9001 acepta las credenciales del cuadro de accesos.
+- El bucket `movilidad` existe. En una instancia nueva todavia no contiene archivos.
+
+Las imagenes MinIO proceden de los mirrors documentados de Teable en GHCR. El
+servidor y el cliente mantienen sus versiones fijadas. La preparacion del bucket
+se puede repetir sin eliminar archivos ni restablecer los datos del ejercicio.
+Los scripts .sh se guardan con saltos LF, incluso al clonar desde Windows.

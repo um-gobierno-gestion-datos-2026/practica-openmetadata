@@ -12,7 +12,9 @@
   "forwardPorts": [
     8585,
     8080,
-    5432
+    5432,
+    9000,
+    9001
   ],
   "portsAttributes": {
     "8585": {
@@ -28,6 +30,16 @@
     "5432": {
       "label": "PostgreSQL - movilidad",
       "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "9000": {
+      "label": "MinIO API S3",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "9001": {
+      "label": "MinIO archivos",
+      "onAutoForward": "notify",
       "visibility": "private"
     }
   },

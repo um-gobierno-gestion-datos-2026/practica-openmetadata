@@ -4,3 +4,4 @@ evidencias/*
 *.log
 __pycache__/
 docker-volume/
+movilidad_backup.sql

@@ -17,13 +17,24 @@ if ! sudo sysctl -w vm.max_map_count=262144 >/dev/null; then
 fi
 dc config --quiet
 dc up -d
-# No se vuelve a cargar SQL: PostgreSQL inicializa los datos una sola vez.
+# PostgreSQL prepara las tablas una sola vez. Publicacion y carga siguen siendo manuales.
 for attempt in $(seq 1 180); do
-  if dc exec -T openmetadata-server wget -q --spider http://localhost:8586/healthcheck 2>/dev/null \
+  init_id=$(dc ps -a -q minio-init)
+  init_state=""
+  if [[ -n "$init_id" ]]; then
+    init_state=$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$init_id")
+    if [[ "$init_state" == exited* && "$init_state" != "exited 0" ]]; then
+      dc logs --tail=60 minio-init
+      echo 'Fallo la preparacion de MinIO.'; exit 1
+    fi
+  fi
+  if [[ "$init_state" == "exited 0" ]] \
+     && dc exec -T openmetadata-server wget -q --spider http://localhost:8586/healthcheck 2>/dev/null \
      && dc exec -T postgres-lab psql -U estudiante -d movilidad -tAc "SELECT count(*)=4 FROM information_schema.tables WHERE table_schema='movilidad_g01'" | grep -qx t \
+     && dc exec -T minio curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 \
      && dc exec -T ingestion curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
     echo 'Servicios disponibles. Abrí el puerto 8585 en la pestaña Ports.'
-    echo 'Seguí README.md para conectar PostgreSQL e ingerir las cuatro tablas.'
+    echo 'Abrí MinIO en el puerto 9001. Seguí README.md para publicar y catalogar archivos antes de cargar PostgreSQL.'
     exit 0
   fi
   sleep 5

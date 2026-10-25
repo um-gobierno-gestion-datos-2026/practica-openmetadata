@@ -37,3 +37,13 @@ Declarar si el linaje se registró manualmente o se obtuvo por un conector.
 ## Calidad y límites
 Indicar pruebas, criterios de aceptación, ejecución y resultados.
 Explicar cobertura, faltantes y restricciones de uso.
+
+## Procedencia de archivos
+- CSV fuente y ruta relativa al repositorio:
+- URI S3 y activo de almacenamiento en OpenMetadata:
+- SQL de carga y transformación:
+- Reglas de deduplicación y valores ausentes:
+- Tablas anteriores en el linaje:
+- Evidencia de última ejecución (fecha y resultado):
+
+Una ruta documentada identifica procedencia, no implica que el archivo exista como activo del catálogo.

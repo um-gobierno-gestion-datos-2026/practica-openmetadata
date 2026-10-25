@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "dataPath": "individual/tramos.csv",
+      "structureFormat": "csv",
+      "separator": ",",
+      "isPartitioned": false
+    },
+    {
+      "dataPath": "reportes/",
+      "structureFormat": "csv",
+      "separator": ",",
+      "isPartitioned": false
+    }
+  ]
+}

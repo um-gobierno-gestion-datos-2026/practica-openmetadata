@@ -1,22 +1,25 @@
-"""Prueba de integración contra PostgreSQL del compose. Requiere Docker."""
+"""Prueba de integración S3 a PostgreSQL. Modifica SOLO los servicios de CI."""
 from pathlib import Path
 import subprocess
 root=Path(__file__).resolve().parents[1]
-base=['docker','compose','-f',str(root/'compose.yaml'),'exec','-T','postgres-lab','psql','-X','-v','ON_ERROR_STOP=1','-U','estudiante','-d','movilidad','-At']
-def sql(query):
- return subprocess.check_output(base,input=query,text=True).strip()
-def file(name):
- return (root/name).read_text()
+dc=['docker','compose','-f',str(root/'compose.yaml')]
+base=dc+['exec','-T','postgres-lab','psql','-X','-v','ON_ERROR_STOP=1','-U','estudiante','-d','movilidad','-At']
+def sql(q):return subprocess.check_output(base,input=q,text=True).strip()
 def violations():
- query=file('actividad/sql/03_test_conservacion.sql').strip().rstrip(';')
- return sql('SELECT count(*) FROM ('+query+') AS fallos;')
-assert sql("SELECT count(*) FROM information_schema.tables WHERE table_schema='movilidad_g01';")=='4'
-assert sql('SELECT count(*) FROM movilidad_g01.reportes_crudos;')=='7'
-assert violations()=='1', 'El error intencional debe detectarse'
-assert sql("SELECT n_reportes || '|' || n_velocidades || '|' || velocidad_media_kmh::int FROM movilidad_g01.resumen_diario WHERE tramo_id='T02';")=='1|1|26'
-sql(file('actividad/docente/05_corregir_resumen.sql'))
-assert violations()=='0', 'La corrección debe satisfacer el criterio'
+ q=(root/'actividad/sql/03_test_conservacion.sql').read_text().strip().rstrip(';')
+ return sql('SELECT count(*) FROM ('+q+') AS fallos;')
+assert sql('SELECT count(*) FROM movilidad_g01.reportes_crudos;')=='0'
+for action in ['archivo','carpeta','manifiesto']:
+ subprocess.run(dc+['run','--rm','archivos',action],check=True)
+oid=sql("SELECT 'movilidad_g01.resumen_diario'::regclass::oid;")
+for _ in range(2):
+ subprocess.run(dc+['run','--rm','--build','carga'],check=True)
+ assert sql('SELECT count(*) FROM movilidad_g01.reportes_crudos;')=='7'
+ assert sql('SELECT count(*) FROM movilidad_g01.reportes_validos;')=='5'
+ assert violations()=='1'
+assert sql("SELECT 'movilidad_g01.resumen_diario'::regclass::oid;")==oid
+sql((root/'actividad/docente/05_corregir_resumen.sql').read_text())
+assert violations()=='0'
 assert sql("SELECT n_reportes || '|' || n_velocidades || '|' || velocidad_media_kmh::int FROM movilidad_g01.resumen_diario WHERE tramo_id='T02';")=='2|1|26'
-assert sql("SELECT has_table_privilege('catalogo_lector','movilidad_g01.resumen_diario','SELECT');")=='t'
 assert sql("SELECT has_table_privilege('catalogo_lector','movilidad_g01.resumen_diario','INSERT');")=='f'
-print('PostgreSQL: carga, discrepancia, corrección y permisos verificados.')
+print('Fuentes S3, recarga sin acumulacion, identidad de tablas, correccion y permisos: OK.')

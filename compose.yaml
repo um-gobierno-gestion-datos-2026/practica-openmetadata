@@ -1,4 +1,4 @@
-# Derivado del quickstart OpenMetadata 1.12.6. Ver vendor/README.md.
+# Arranque completo: docker compose up -d. Publicacion y carga de datos son manuales.
 volumes:
   ingestion-volume-dag-airflow: null
   ingestion-volume-dags: null
@@ -6,6 +6,7 @@ volumes:
   es-data: null
   mysql-data: {}
   postgres-lab-data: {}
+  minio-data: {}
 services:
   mysql:
     image: docker.getcollate.io/openmetadata/db:1.12.6
@@ -369,6 +370,16 @@ services:
     - ingestion-volume-tmp:/tmp
     ports:
     - 8080:8080
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - http://localhost:8080/health
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 40
   postgres-lab:
     ports:
     - 5432:5432
@@ -382,6 +393,7 @@ services:
     - postgres-lab-data:/var/lib/postgresql/data
     - ./actividad/sql/01_preparar_caso.sql:/docker-entrypoint-initdb.d/01_caso.sql:ro
     - ./infra/02_lector.sql:/docker-entrypoint-initdb.d/02_lector.sql:ro
+    - ./actividad/sql:/lab-sql:ro
     networks:
     - app_net
     healthcheck:
@@ -391,6 +403,100 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+  minio:
+    image: ghcr.io/teableio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    command:
+    - server
+    - /data
+    - --console-address
+    - :9001
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin_lab
+    ports:
+    - 9000:9000
+    - 9001:9001
+    volumes:
+    - minio-data:/data
+    networks:
+    - app_net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:9000/minio/health/live
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  minio-init:
+    image: ghcr.io/teableio/minio-mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
+    entrypoint:
+    - /bin/sh
+    - /lab/storage.sh
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_USER: minioadmin
+      MINIO_PASSWORD: minioadmin_lab
+    volumes:
+    - ./infra/storage.sh:/lab/storage.sh:ro
+    - ./actividad/fuentes:/fuentes:ro
+    - ./actividad/manifiestos:/manifiestos:ro
+    networks:
+    - app_net
+    depends_on:
+      minio:
+        condition: service_healthy
+    command:
+    - iniciar
+  archivos:
+    image: ghcr.io/teableio/minio-mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
+    entrypoint:
+    - /bin/sh
+    - /lab/storage.sh
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_USER: minioadmin
+      MINIO_PASSWORD: minioadmin_lab
+    volumes:
+    - ./infra/storage.sh:/lab/storage.sh:ro
+    - ./actividad/fuentes:/fuentes:ro
+    - ./actividad/manifiestos:/manifiestos:ro
+    networks:
+    - app_net
+    depends_on:
+      minio:
+        condition: service_healthy
+    profiles:
+    - herramientas
+    command:
+    - listar
+  carga:
+    build:
+      context: .
+      dockerfile: infra/carga/Dockerfile
+    profiles:
+    - herramientas
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: catalogo_storage
+      S3_SECRET_KEY: lector_storage_lab
+      S3_BUCKET: movilidad
+      PGHOST: postgres-lab
+      PGDATABASE: movilidad
+      PGUSER: estudiante
+      PGPASSWORD: estudiante_lab
+    volumes:
+    - ./infra/carga:/app:ro
+    - ./actividad/sql:/lab-sql:ro
+    networks:
+    - app_net
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      postgres-lab:
+        condition: service_healthy
 networks:
   app_net:
     driver: bridge

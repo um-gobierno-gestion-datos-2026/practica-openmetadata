@@ -1,8 +1,10 @@
-# Materiales de la actividad
+# Actividad: fuentes de archivos y destino relacional
 
-Seguir el README de la raíz: este paquete está adaptado a una instancia individual
-por Codespace. El esquema común es `movilidad_g01`, sin colisiones entre estudiantes.
-La base se precarga al primer inicio. Descripciones, glosario, responsables, linaje,
-perfilado y pruebas se realizan en la actividad; no están precargados en el catálogo.
-`datos/` contiene CSV de consulta; la inicialización usa el SQL.
-`docente/` contiene la solución: consultar después del diagnóstico.
+Seguir el README principal. Primero publicar `fuentes/individual/tramos.csv` y la
+carpeta `fuentes/reportes/` en MinIO. Publicar `manifiestos/openmetadata.json` y
+catalogar las fuentes mediante un servicio Storage S3.
+Después ejecutar el cargador manual desde MinIO a PostgreSQL, catalogar sus tablas
+y documentar las dependencias. La carpeta `datos/` conserva las muestras completas
+de referencia de la versión anterior; no es la fuente que consume el cargador.
+No mezclar ambos conjuntos al publicar: las fuentes de esta versión están en `fuentes/`.
+La solución de `docente/` se utiliza después del diagnóstico.
