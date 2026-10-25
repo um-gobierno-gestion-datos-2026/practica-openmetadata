@@ -11,7 +11,8 @@
   },
   "forwardPorts": [
     8585,
-    8080
+    8080,
+    5432
   ],
   "portsAttributes": {
     "8585": {
@@ -21,6 +22,11 @@
     },
     "8080": {
       "label": "Ejecutor de ingestas (Airflow)",
+      "onAutoForward": "silent",
+      "visibility": "private"
+    },
+    "5432": {
+      "label": "PostgreSQL - movilidad",
       "onAutoForward": "silent",
       "visibility": "private"
     }
