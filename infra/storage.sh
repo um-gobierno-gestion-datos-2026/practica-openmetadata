@@ -10,7 +10,11 @@ case "${1:-listar}" in
    if ! mc admin policy attach lab readonly --user catalogo_storage; then
      mc admin user info lab catalogo_storage | grep -q readonly
    fi
-   echo 'Bucket listo. Los archivos se publican manualmente durante la practica.'
+   # Preparacion tecnica del laboratorio. Conservar un manifiesto existente.
+   if ! mc stat lab/movilidad/openmetadata.json >/dev/null 2>&1; then
+     mc cp /manifiestos/openmetadata.json lab/movilidad/openmetadata.json
+   fi
+   echo 'Bucket, lector y manifiesto listos. Los CSV se publican durante la practica.'
    ;;
  archivo) mc cp /fuentes/individual/tramos.csv lab/movilidad/individual/tramos.csv ;;
  carpeta) mc cp --recursive /fuentes/reportes/ lab/movilidad/reportes/ ;;

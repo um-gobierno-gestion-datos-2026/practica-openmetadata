@@ -12,7 +12,13 @@ usa volumen nombrado para MySQL, desactiva autorregistro y deja que Docker elija
 Los componentes de OpenMetadata permanecen todos en 1.12.6.
 No actualizar imágenes de manera independiente. Las etiquetas no son digests inmutables.
 
-La versión de almacenamiento agrega MinIO y su cliente mc, con imágenes fijadas de ghcr.io/teableio. El bucket empieza vacío. Las fuentes locales se montan solo en el cliente de publicación; PostgreSQL no las lee directamente. El cargador manual usa boto3 y psycopg para leer los objetos publicados y transformar los datos.
+El chequeo de ingestion se adapta a Airflow 3 mediante
+`infra/check_ingestion_health.py`, montado en modo lectura. Consulta
+`/api/v2/monitor/health` y verifica el estado de los componentes del JSON. La ruta
+antigua `/health` devolvía 404. La comprobación de arranque usa el mismo script.
+Fuente: https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html
+
+La versión de almacenamiento agrega MinIO y su cliente mc, con imágenes fijadas de ghcr.io/teableio. El bucket empieza con el manifiesto preparado y sin CSV. La tarea minio-init publica el manifiesto si falta y conserva uno existente. Las fuentes locales se montan solo en el cliente de publicación; PostgreSQL no las lee directamente. El cargador manual usa boto3 y psycopg para leer los objetos publicados y transformar los datos.
 
 Corrección de distribución: servidor `ghcr.io/teableio/minio:RELEASE.2025-04-22T22-12-26Z`
 y cliente `ghcr.io/teableio/minio-mc:RELEASE.2025-04-16T18-13-26Z`. Son mirrors de

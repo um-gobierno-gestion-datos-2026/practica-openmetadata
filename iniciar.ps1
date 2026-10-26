@@ -1,4 +1,4 @@
-# Inicia el proyecto y espera los servicios. No borra volumenes ni carga archivos.
+# Inicia el proyecto y prepara el manifiesto. Conserva volumenes; los CSV y las filas se cargan manualmente.
 $ErrorActionPreference = "Stop"
 Push-Location $PSScriptRoot
 try {
@@ -39,7 +39,7 @@ try {
     }
     Write-Host "OpenMetadata: http://localhost:8585  (admin@open-metadata.org / admin)"
     Write-Host "MinIO:        http://localhost:9001  (minioadmin / minioadmin_lab)"
-    Write-Host "Bucket movilidad y lector S3 preparados. Los archivos se publican durante la practica."
+    Write-Host "Bucket movilidad, lector S3 y manifiesto preparados. Los CSV se publican durante la practica."
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1

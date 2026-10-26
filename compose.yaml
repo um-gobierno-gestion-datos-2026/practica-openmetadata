@@ -1,4 +1,4 @@
-# Arranque completo: docker compose up -d. Publicacion y carga de datos son manuales.
+# Arranque completo: docker compose up -d. Manifiesto preparado; CSV y carga de filas manuales.
 volumes:
   ingestion-volume-dag-airflow: null
   ingestion-volume-dags: null
@@ -368,14 +368,14 @@ services:
     - ingestion-volume-dag-airflow:/opt/airflow/dag_generated_configs
     - ingestion-volume-dags:/opt/airflow/dags
     - ingestion-volume-tmp:/tmp
+    - ./infra/check_ingestion_health.py:/lab/check_ingestion_health.py:ro
     ports:
     - 8080:8080
     healthcheck:
       test:
       - CMD
-      - curl
-      - -fsS
-      - http://localhost:8080/health
+      - python3
+      - /lab/check_ingestion_health.py
       interval: 15s
       timeout: 10s
       start_period: 120s

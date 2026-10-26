@@ -14,9 +14,10 @@ jobs:
           for script in scripts/*.sh; do bash -n "$script"; done
           sh -n infra/storage.sh
           python3 tests/test_csv_reader.py
+          python3 tests/test_ingestion_health.py
       - name: Validar Compose
         run: docker compose config --quiet
-      - name: Preparar almacenamiento y destino vacíos
+      - name: Preparar MinIO con manifiesto y tablas vacías
         run: |
           docker compose up -d --wait --wait-timeout 150 postgres-lab minio
           docker compose run --rm minio-init

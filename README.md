@@ -5,9 +5,11 @@ MinIO compatible con S3 y PostgreSQL 16.10. Todos los datos son sintéticos.
 
 ## Qué se inicia y qué hace el estudiante
 
-Al arrancar se prepara OpenMetadata, un bucket `movilidad` vacío en MinIO,
-un usuario lector de almacenamiento y cuatro tablas vacías en PostgreSQL nuevo.
-**No se publican archivos ni se cargan filas automáticamente.**
+Al arrancar se prepara OpenMetadata, el bucket `movilidad` en MinIO con
+`openmetadata.json` disponible, un usuario lector de almacenamiento y cuatro tablas
+vacías en PostgreSQL nuevo. El manifiesto es parte de la preparación técnica del
+laboratorio; el estudiante comienza publicando los CSV.
+**No se publican los CSV ni se cargan filas automáticamente.**
 
 La práctica tiene dos etapas independientes:
 
@@ -43,8 +45,33 @@ docker compose ps -a
 MinIO y `minio-init` son servicios del arranque por defecto, sin activar perfiles.
 Los perfiles se reservan para los comandos manuales de publicacion y carga.
 
-El proceso `minio-init` crea el bucket y el lector. Debe terminar con Exited (0),
-igual que la migración del catálogo. No vuelve a publicar fuentes al reiniciar.
+El proceso `minio-init` crea el bucket y el lector, y publica el manifiesto si falta.
+Conserva un manifiesto ya existente. Debe terminar con Exited (0), igual que la
+migración del catálogo. Los CSV se publican manualmente durante la actividad.
+
+### Si el puerto 8585 está ocupado
+
+Identificar qué contenedor ya lo publica:
+
+```bash
+docker ps --filter "publish=8585"
+```
+
+Una instalación anterior puede seguir respondiendo en el navegador aunque el
+servidor de este laboratorio no haya podido arrancar. Comprobar también la versión
+de su imagen: el laboratorio utiliza servidor e ingestion de OpenMetadata 1.12.6.
+
+Si la instalación anterior es `openmetadata_server` y se va a usar el laboratorio
+nuevo, detener ese contenedor para liberar el puerto:
+
+```bash
+docker stop openmetadata_server
+docker compose up -d
+```
+
+El contenedor anterior y sus datos se conservan. Los dos proyectos tienen catálogos
+independientes: un servicio creado en la instalación anterior no aparece
+automáticamente en el catálogo nuevo.
 
 ## Arranque en Codespaces
 
@@ -107,23 +134,7 @@ Esta operación copia archivos desde un filesystem local montado al almacén S3.
 Los dos archivos de reportes comparten columnas y forman un conjunto lógico.
 No confundir cantidad de archivos con cantidad de filas.
 
-### 1.3 Manifiesto de catalogación
-
-Revisar `actividad/manifiestos/openmetadata.json`. Tiene dos entradas:
-una para el CSV individual y otra para el conjunto `reportes/`, ambas formato CSV.
-Publicarlo en la raíz del bucket (no dentro de una carpeta) desde la consola,
-o ejecutar:
-
-```bash
-docker compose run --rm archivos manifiesto
-```
-
-El manifiesto describe dónde están los datos y qué formato tienen. No contiene
-las filas ni carga datos a PostgreSQL. El conector lo usa para extraer estructura.
-Una entrada de carpeta representa un conjunto, no necesariamente un activo separado
-por cada archivo diario. Una muestra de un archivo no valida todos los archivos.
-
-## Etapa 1.4. Catalogar las fuentes en OpenMetadata
+## Etapa 1.3. Catalogar las fuentes en OpenMetadata
 
 Settings > Services > Storage > Add New Service, tipo **S3**:
 
@@ -214,12 +225,72 @@ Perfilado y pruebas de calidad son ejecuciones adicionales. Usar los SQL de
 ## Adoptar esta versión con una instalación anterior
 
 Actualizar los archivos y ejecutar `docker compose up -d`. No borrar volúmenes.
+Para aplicar solo la preparación del manifiesto a una instancia que ya está
+funcionando, actualizar los archivos del proyecto y ejecutar:
+
+```bash
+docker compose run --rm minio-init
+docker compose run --rm archivos listar
+```
+
+No requiere reconstruir imágenes ni reiniciar OpenMetadata o PostgreSQL.
+Comprobar que aparece `openmetadata.json` en la raíz de `movilidad`.
 Los datos ya existentes en PostgreSQL permanecen. Para mostrar la primera etapa
 no hace falta borrarlos: todavía se pueden publicar y catalogar las fuentes.
 Cuando se ejecute `carga`, reemplazará las filas con los objetos del bucket.
 Las descripciones existentes del servicio PostgreSQL se conservan si no se activa
 Override Metadata. No ejecutar el SQL de creación sobre tablas existentes.
 No usar `docker compose down -v` para actualizar.
+
+### Corrección del chequeo de Airflow 3
+
+La imagen ingestion 1.12.6 del laboratorio ejecuta Airflow 3. Su endpoint de salud
+es `/api/v2/monitor/health`; la ruta anterior `/health` devuelve 404 y hacía que el
+contenedor figurara como unhealthy aunque la API estuviera atendiendo solicitudes.
+
+La comprobación actual ejecuta `infra/check_ingestion_health.py` dentro del
+contenedor. Verifica la respuesta JSON de la base de metadatos y del scheduler,
+y también el estado del procesador de DAGs y del triggerer cuando están informados.
+Un HTTP 200 con componentes unhealthy se considera un fallo.
+
+Para aplicar la corrección con MySQL y Elasticsearch ya disponibles y la migración
+completada, actualizar los archivos del paquete, incluido el nuevo script de infra,
+y ejecutar:
+
+```bash
+docker compose up -d --no-deps openmetadata-server ingestion
+docker compose ps -a openmetadata-server ingestion
+```
+
+Compose recrea ingestion por el cambio de configuración, conservando sus volúmenes.
+El puerto 8585 debe estar libre para que el servidor del laboratorio pueda arrancar.
+Para ejecutar la comprobación y ver un error concreto:
+
+```bash
+docker compose exec ingestion python3 /lab/check_ingestion_health.py
+```
+
+Referencia: https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html
+
+## Preparación técnica del manifiesto (docente)
+
+`minio-init` publica automáticamente `actividad/manifiestos/openmetadata.json` en la
+raíz del bucket cuando falta. Tiene una entrada para el CSV de tramos y otra para
+el conjunto `reportes/`. El estudiante no debe crearlo ni publicarlo como paso
+separado de la actividad.
+
+El conector lo usa para reconocer rutas y extraer estructura. Una entrada de
+carpeta representa un conjunto, no necesariamente un activo separado por cada
+archivo diario. Una muestra de un archivo no valida todos los archivos.
+
+La preparación conserva un manifiesto existente. Si el docente cambia el archivo
+local y quiere reemplazar explícitamente el del bucket, puede ejecutar:
+
+```bash
+docker compose run --rm archivos manifiesto
+```
+
+Esta acción actualiza solo el manifiesto. No publica CSV ni carga filas a PostgreSQL.
 
 ## Guardar y detener
 
@@ -238,7 +309,9 @@ y `docker compose logs --tail=80 NOMBRE_DEL_SERVICIO`.
 ## Verificación y límites
 
 Se verificaron localmente la configuración, los CSV, el manifiesto contra el esquema
-oficial de OpenMetadata 1.12.6 y pruebas del lector de archivos. El workflow de
+oficial de OpenMetadata 1.12.6 y pruebas del lector de archivos. El chequeo de Airflow
+tiene pruebas HTTP locales para componentes sanos, componentes en fallo, respuestas
+incompletas y la ruta antigua con 404. El workflow de
 GitHub Actions comprueba publicación S3 y carga PostgreSQL cuando se ejecuta.
 En este entorno no hay Docker: sigue pendiente el ensayo completo de arranque,
 conexión S3, ingesta y representación de activos en OpenMetadata antes de clase.
@@ -274,7 +347,8 @@ Fuente: https://github.com/teableio/teable-deployment/blob/main/VERSIONS.md
 - `minio`, `postgres-lab`, `openmetadata-server` e `ingestion`: activos y healthy.
 - `minio-init` y `execute-migrate-all`: Exited (0), trabajo completado.
 - MinIO Console en 9001 acepta las credenciales del cuadro de accesos.
-- El bucket `movilidad` existe. En una instancia nueva todavia no contiene archivos.
+- El bucket `movilidad` contiene `openmetadata.json` en su raíz. En una instancia
+  nueva todavía no hay CSV publicados ni filas en las tablas PostgreSQL del caso.
 
 Las imagenes MinIO proceden de los mirrors documentados de Teable en GHCR. El
 servidor y el cliente mantienen sus versiones fijadas. La preparacion del bucket

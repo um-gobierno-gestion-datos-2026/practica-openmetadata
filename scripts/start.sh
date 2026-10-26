@@ -17,7 +17,7 @@ if ! sudo sysctl -w vm.max_map_count=262144 >/dev/null; then
 fi
 dc config --quiet
 dc up -d
-# PostgreSQL prepara las tablas una sola vez. Publicacion y carga siguen siendo manuales.
+# PostgreSQL prepara tablas vacias una vez. minio-init prepara el manifiesto; los CSV y su carga son manuales.
 for attempt in $(seq 1 180); do
   init_id=$(dc ps -a -q minio-init)
   init_state=""
@@ -32,9 +32,9 @@ for attempt in $(seq 1 180); do
      && dc exec -T openmetadata-server wget -q --spider http://localhost:8586/healthcheck 2>/dev/null \
      && dc exec -T postgres-lab psql -U estudiante -d movilidad -tAc "SELECT count(*)=4 FROM information_schema.tables WHERE table_schema='movilidad_g01'" | grep -qx t \
      && dc exec -T minio curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 \
-     && dc exec -T ingestion curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
+     && dc exec -T ingestion python3 /lab/check_ingestion_health.py >/dev/null 2>&1; then
     echo 'Servicios disponibles. Abrí el puerto 8585 en la pestaña Ports.'
-    echo 'Abrí MinIO en el puerto 9001. Seguí README.md para publicar y catalogar archivos antes de cargar PostgreSQL.'
+    echo 'Bucket y manifiesto preparados. Abrí MinIO en el puerto 9001 y seguí README.md para publicar los CSV y catalogar las fuentes.'
     exit 0
   fi
   sleep 5
